@@ -582,6 +582,7 @@ scrape_twitter_data_task = PythonOperator(
     task_id='scrape_twitter_data_task',
     provide_context=True,
     python_callable=get_twitter_data,
+    trigger_rule=TriggerRule.ALL_SUCCESS,
     op_kwargs=default_args,
     dag=dag,
 )
@@ -590,6 +591,7 @@ scrape_skytrax_reviews_task = PythonOperator(
     task_id='scrape_skytrax_reviews_task',
     provide_context=True,
     python_callable=get_skytrax_reviews,
+    trigger_rule=TriggerRule.ALL_SUCCESS,
     op_kwargs=default_args,
     dag=dag,
 )
