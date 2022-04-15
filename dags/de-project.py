@@ -17,6 +17,7 @@ import io
 from bs4 import BeautifulSoup
 import numpy as np
 
+
 import logging
 
 log = logging.getLogger(__name__)
@@ -112,7 +113,7 @@ def get_twitter_data(**kwargs):
 
 
     queries =  ["#BritishAirways lang:en", "@BritishAirways lang:en"]
-    max_results = 10
+    max_results = 50
 
     for query in queries:
         
@@ -415,6 +416,56 @@ def save_skytrax_reviews_to_s3(**kwargs):
 
     log.info('Finished saving the scraped skytrax reviews to s3 in parquet files')
 
+def clean_text(text):
+    '''
+    Insert text and output cleaned text
+    '''  
+    text = re.sub("(https://)\S+", "", text) # Remove links
+    text = re.sub("(www.)\S+", "", text) # Remove links
+    text = re.sub("(\\n)|\n|\r|\t", "", text) # Remove CR, tab, and LR
+    text = re.sub("@([A-Za-z0-9_]+)", "", text) # Remove usernames
+    text = re.sub("#([A-Za-z0-9_]+)", "", text) # Remove hashtags
+    text = re.sub("[0-9]", "", text) # Remove numbers
+    text = re.sub("\:|\/|\#|\.|\?|\!|\&|\"|\,|;|^|<|>|\'|\-", " ", text) # Remove special characters
+    text = re.sub("[^\x00-\x7F]+", "", text) #Remove emojis
+    text = re.sub("RT ", "", text) # Remove RT
+
+    text = text.lower() # Make lowercase   
+    stop_words = ["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours",
+            "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself",
+            "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who",
+            "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been",
+            "being", "have", "haven", "has", "had","hadn", "having", "do", "does", "did", "doing", "a", "an", "the",
+            "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with",
+            "about", "against", "between", "into", "through", "during", "before", "after", "above", "below",
+            "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further",
+            "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each",
+            "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same",
+            "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"]
+
+    text = ' '.join([word for word in text.split() if word not in (stop_words)])
+    return text
+
+def clean_aircraft(aircraft):
+    aircraft = str(aircraft)
+    aircraft = re.sub(r'(^.*A318.*$)', 'A318', aircraft)
+    aircraft = re.sub(r'(^.*A319.*$)', 'A319', aircraft)
+    aircraft = re.sub(r'(^.*A320.*$)', 'A320', aircraft)
+    aircraft = re.sub(r'(^.*A321.*$)', 'A321', aircraft)
+    aircraft = re.sub(r'(^.*A350.*$)', 'A350', aircraft)
+    aircraft = re.sub(r'(^.*A380.*$)', 'A380', aircraft)
+    aircraft = re.sub(r'(^.*737.*$)', 'Boeing 737', aircraft)
+    aircraft = re.sub(r'(^.*747.*$)', 'Boeing 747', aircraft)
+    aircraft = re.sub(r'(^.*757.*$)', 'Boeing 757', aircraft)
+    aircraft = re.sub(r'(^.*767.*$)', 'Boeing 767', aircraft)
+    aircraft = re.sub(r'(^.*777.*$)', 'Boeing 777', aircraft)
+    aircraft = re.sub(r'(^.*787.*$)', 'Boeing 787', aircraft)
+    aircrafts = ["A318", "A319", "A320", "A321", "A350", "A380", "Boeing 737", "Boeing 747", 
+                 "Boeing 757", "Boeing 767", "Boeing 777", "Boeing 787"]
+    if aircraft not in aircrafts:
+        aircraft = "unkown"
+    return aircraft
+
 def import_scraped_data_from_s3_to_pg_db(**kwargs):
     
     '''
@@ -448,9 +499,19 @@ def import_scraped_data_from_s3_to_pg_db(**kwargs):
     # Convert parquet files into pandas dataframe
     df_tweets = pd.read_parquet(io.BytesIO(tweets_object))
     df_users = pd.read_parquet(io.BytesIO(users_object))
-
     df_skytrax = pd.read_parquet(io.BytesIO(skytrax_object))
 
+    # Clean text of tweet
+    df_tweets['tweet_text'] =  df_tweets['tweet_text'].map(lambda x: clean_text(x))
+
+    # Remove emojis from names at twitter
+    df_users["user_name"] =  [re.sub("[^\x00-\x7F]+", "",  str(x)).strip() for x in df_users["user_name"]]
+
+    # Clean text of review title and review body and clean aircraft
+    df_skytrax['review_title'] =  df_skytrax['review_title'].map(lambda x: clean_text(x))
+    df_skytrax['review_text'] =  df_skytrax['review_text'].map(lambda x: clean_text(x))
+    df_skytrax['aircraft'] =  df_skytrax['aircraft'].map(lambda x: clean_aircraft(x))
+    
     log.info("Retrieved twitter data from S3 bucket")
 
     # Connect to the PostgreSQL database
@@ -525,19 +586,19 @@ scrape_twitter_data_task = PythonOperator(
     dag=dag,
 )
 
+scrape_skytrax_reviews_task = PythonOperator(
+    task_id='scrape_skytrax_reviews_task',
+    provide_context=True,
+    python_callable=get_skytrax_reviews,
+    op_kwargs=default_args,
+    dag=dag,
+)
+
 save_twitter_data_to_s3_task = PythonOperator(
     task_id='save_twitter_data_to_s3_task',
     provide_context=True,
     python_callable=save_twitter_data_to_s3,
     trigger_rule=TriggerRule.ALL_SUCCESS,
-    op_kwargs=default_args,
-    dag=dag,
-)
-
-scrape_skytrax_reviews_task = PythonOperator(
-    task_id='scrape_skytrax_reviews_task',
-    provide_context=True,
-    python_callable=get_skytrax_reviews,
     op_kwargs=default_args,
     dag=dag,
 )
@@ -560,34 +621,25 @@ import_scraped_data_from_s3_to_pg_db_task = PythonOperator(
     dag=dag,
 )
 
-cmd = f'airflow connections delete \'ssh_spark_conn\'; \
+cmd = f'airflow connections delete \'ssh_spark_conn\';  \
         airflow connections add \'ssh_spark_conn\' \
-         --conn-type \'ssh\' \
+        --conn-type \'ssh\' \
         --conn-login \'master\' \
         --conn-password  \'master\' \
         --conn-host \'spark-server\' '
-'''
-This task programatically adds a airflow connectio for ssh server
-'''
+
+
 create_ssh_conn_task = BashOperator(
-    task_id='create_ssh_conn',
+    task_id='create_ssh_conn_task',
     bash_command=cmd,
     dag=dag
 )
 
-
-'''
-Next task makes use of the abv ssh connection
-and executes a PI calculation example via spark
-on spark server
-'''
-
 sparkcmd = '/usr/spark-2.4.0/bin/spark-submit  /home/master/scripts/mllib_spark.py '
-
 
 spark_task= SSHOperator(
     ssh_conn_id='ssh_spark_conn',
-    task_id='spark_run_pi_example',
+    task_id='spark_task',
     command= sparkcmd,
     dag=dag) 
 
@@ -595,7 +647,5 @@ spark_task= SSHOperator(
 # 4. Indicating the order of the dags
 # =============================================================================
 
-create_schema_task >> scrape_twitter_data_task >> save_twitter_data_to_s3_task >> scrape_skytrax_reviews_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
-
-
-
+#create_schema_task >> scrape_twitter_data_task >> save_twitter_data_to_s3_task >> scrape_skytrax_reviews_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
+create_schema_task >> scrape_twitter_data_task >>  scrape_skytrax_reviews_task >> save_twitter_data_to_s3_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
