@@ -16,8 +16,6 @@ import json
 import io
 from bs4 import BeautifulSoup
 import numpy as np
-
-
 import logging
 
 log = logging.getLogger(__name__)
@@ -158,7 +156,6 @@ def get_twitter_data(**kwargs):
                 user_id = tweet['id']
                 user_verified = tweet['verified']   
                 user_name = tweet['name']
-                #user_name = re.sub(r"[^\x00-\x7F]+", "", user_name) #Remove emojis
                 user_username = tweet['username']   
                 user_created_at = tweet['created_at']   
                 user_nb_followers = tweet['public_metrics']['followers_count']
