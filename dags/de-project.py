@@ -17,6 +17,7 @@ import io
 from bs4 import BeautifulSoup
 import numpy as np
 import logging
+from textblob import TextBlob
 
 log = logging.getLogger(__name__)
 
@@ -463,6 +464,37 @@ def clean_aircraft(aircraft):
         aircraft = "unkown"
     return aircraft
 
+def clean_recommendation(recommendation):
+    if recommendation!= 'no' or recommendation!= 'yes':
+        recommendation == np.nan
+    return recommendation
+    
+def clean_traveller_type(traveller_type):
+    traveller_type_L = ['Couple Leisure','Business','Family Leisure','Solo Leisure'] 
+    if traveller_type not in traveller_type_L:
+        traveller_type == np.nan
+    else:
+        traveller_type = traveller_type.split()[0]
+    return traveller_type       
+        
+def clean_cabin_flown(cabin_flown):
+    cabin_flown_L = ['Business Class','Economy Class', 'Premium Economy', 'First Class'] 
+    if cabin_flown not in cabin_flown_L:
+        cabin_flown == np.nan
+    elif cabin_flown != 'Premium Economy':
+        cabin_flown = cabin_flown.split()[0]
+    return cabin_flown
+
+def get_sentiment(text):
+    value = TextBlob(text).sentiment[0]
+    if value == 0.0:
+        return "neutral"
+    elif value >= 0.0:
+        return "positive"
+    else:
+        return "negative"
+    
+
 def import_scraped_data_from_s3_to_pg_db(**kwargs):
     
     '''
@@ -507,9 +539,19 @@ def import_scraped_data_from_s3_to_pg_db(**kwargs):
     # Clean text of review title and review body and clean aircraft
     df_skytrax['review_title'] =  df_skytrax['review_title'].map(lambda x: clean_text(x))
     df_skytrax['review_text'] =  df_skytrax['review_text'].map(lambda x: clean_text(x))
+    df_skytrax['review_sentiment'] =  df_skytrax['review_text'].map(lambda x: get_sentiment(x))
+
     df_skytrax['aircraft'] =  df_skytrax['aircraft'].map(lambda x: clean_aircraft(x))
-    
-    log.info("Retrieved twitter data from S3 bucket")
+    df_skytrax['traveller_type'] =  df_skytrax['traveller_type'].map(lambda x: clean_traveller_type(x))
+    df_skytrax['cabin_flown'] =  df_skytrax['cabin_flown'].map(lambda x: clean_cabin_flown(x))
+    df_skytrax['recommendation'] =  df_skytrax['recommendation'].map(lambda x: clean_recommendation(x))
+    df_skytrax['date_flown'] = pd.to_datetime(df_skytrax['date_flown']).dt.strftime('%m-%Y')
+    df_skytrax['review_date_published'] = pd.to_datetime(df_skytrax['review_date_published']).dt.strftime('%d-%m-%Y')
+    df_skytrax["date_flown"] = np.where(df_skytrax["review_date_published"] < df_skytrax["date_flown"], np.nan, df_skytrax["date_flown"])
+    df_skytrax = df_skytrax.drop(columns=['review_text']) 
+
+    log.info("Retrieved and cleaned data from S3 bucket")
+    log.info(print(df_skytrax))
 
     # Connect to the PostgreSQL database
     pg_hook = PostgresHook(postgres_conn_id=kwargs['postgres_conn_id'], schema=kwargs['db_name'])
@@ -543,19 +585,19 @@ def import_scraped_data_from_s3_to_pg_db(**kwargs):
     conn.commit()
 
     log.info('Finished importing the scraped tweets\' to postgres database')
-
+    print(df_skytrax.values.tolist())
     # Insert skytrax reviews to skytrax_reviews table
     s3 = """INSERT INTO airline_postgres_schema.skytrax_reviews(review_id, airline, overall_rating, review_title, review_author, 
-    review_text, review_date_published, aircraft, traveller_type, cabin_flown, route, date_flown, value_for_money, 
+    review_date_published, aircraft, traveller_type, cabin_flown, route, date_flown, value_for_money, 
     inflight_entertainment, ground_service, seat_comfort, food_and_beverages, cabin_staff_service, wifi_and_connectivity, 
-    recommendation) VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (review_text) DO UPDATE SET
+    recommendation,review_sentiment) VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (review_title) DO UPDATE SET
     (review_id, airline, overall_rating, review_title, review_author, 
-    review_text, review_date_published, aircraft, traveller_type, cabin_flown, route, date_flown, value_for_money, 
+    review_date_published, aircraft, traveller_type, cabin_flown, route, date_flown, value_for_money, 
     inflight_entertainment, ground_service, seat_comfort, food_and_beverages, cabin_staff_service, wifi_and_connectivity, 
-    recommendation)=(EXCLUDED.review_id, EXCLUDED.airline, EXCLUDED.overall_rating, EXCLUDED.review_title, EXCLUDED.review_author, 
-    EXCLUDED.review_text, EXCLUDED.review_date_published, EXCLUDED.aircraft, EXCLUDED.traveller_type, EXCLUDED.cabin_flown, EXCLUDED.route, EXCLUDED.date_flown, EXCLUDED.value_for_money, 
+    recommendation,review_sentiment)=(EXCLUDED.review_id, EXCLUDED.airline, EXCLUDED.overall_rating, EXCLUDED.review_title, EXCLUDED.review_author, 
+    EXCLUDED.review_date_published, EXCLUDED.aircraft, EXCLUDED.traveller_type, EXCLUDED.cabin_flown, EXCLUDED.route, EXCLUDED.date_flown, EXCLUDED.value_for_money, 
     EXCLUDED.inflight_entertainment, EXCLUDED.ground_service, EXCLUDED.seat_comfort, EXCLUDED.food_and_beverages, EXCLUDED.cabin_staff_service, EXCLUDED.wifi_and_connectivity, 
-    EXCLUDED.recommendation);"""
+    EXCLUDED.recommendation, EXCLUDED.review_sentiment);"""
     cursor.executemany(s3, df_skytrax.values.tolist())
     conn.commit()
     
