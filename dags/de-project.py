@@ -673,6 +673,7 @@ cmd = f'airflow connections delete \'ssh_spark_conn\';  \
 create_ssh_conn_task = BashOperator(
     task_id='create_ssh_conn_task',
     bash_command=cmd,
+    trigger_rule=TriggerRule.ALL_SUCCESS,
     dag=dag
 )
 
@@ -682,7 +683,9 @@ spark_task= SSHOperator(
     ssh_conn_id='ssh_spark_conn',
     task_id='spark_task',
     command= sparkcmd,
+    trigger_rule=TriggerRule.ALL_SUCCESS,
     dag=dag) 
+
 
 # =============================================================================
 # 4. Indicating the order of the dags
