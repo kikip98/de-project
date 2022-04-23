@@ -240,7 +240,6 @@ def get_skytrax_reviews(**kwargs):
     reviews_row_index = 0
     
     airline_names = ["British Airways"]
-    review_id = 1
 
     for airline_name in airline_names:
 
@@ -365,7 +364,6 @@ def get_skytrax_reviews(**kwargs):
 
                 reviews_df.loc[reviews_row_index] = review_info_row
                 reviews_row_index += 1
-                review_id += 1
                 
     log.info("Finished scraping Skytrax reviews")
     json_skytrax = reviews_df.to_json()          
