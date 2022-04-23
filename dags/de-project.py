@@ -69,7 +69,6 @@ def create_schema(**kwargs):
 
     log.info('Reading sql file with queries to create database')
     sql_queries = s3.read_key(key, bucket_name)
-    print(sql_queries)
 
     # Connect to the database
     pg_hook = PostgresHook(postgres_conn_id=kwargs['postgres_conn_id'], schema=kwargs['db_name'])
