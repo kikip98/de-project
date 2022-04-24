@@ -548,7 +548,6 @@ def import_scraped_data_from_s3_to_pg_db(**kwargs):
     df_skytrax = df_skytrax.drop(columns=['review_text']) 
 
     log.info("Retrieved and cleaned data from S3 bucket")
-    log.info(print(df_skytrax))
 
     # Connect to the PostgreSQL database
     pg_hook = PostgresHook(postgres_conn_id=kwargs['postgres_conn_id'], schema=kwargs['db_name'])
@@ -582,7 +581,7 @@ def import_scraped_data_from_s3_to_pg_db(**kwargs):
     conn.commit()
 
     log.info('Finished importing the scraped tweets\' to postgres database')
-    print(df_skytrax.values.tolist())
+
     # Insert skytrax reviews to skytrax_reviews table
     s3 = """INSERT INTO airline_postgres_schema.skytrax_reviews(review_id, airline, overall_rating, review_title, review_author, 
     review_date_published, aircraft, traveller_type, cabin_flown, route, date_flown, value_for_money, 
@@ -688,5 +687,4 @@ spark_task= SSHOperator(
 # 4. Indicating the order of the dags
 # =============================================================================
 
-#create_schema_task >> scrape_twitter_data_task >> save_twitter_data_to_s3_task >> scrape_skytrax_reviews_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
 create_schema_task >> scrape_twitter_data_task >>  scrape_skytrax_reviews_task >> save_twitter_data_to_s3_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
