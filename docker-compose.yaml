@@ -149,3 +149,16 @@ services:
     volumes:
       - .:/sources
 
+  spark-server:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+      args:
+          SSH_MASTER_USER: master
+          SSH_MASTER_PASS: master
+    hostname: spark-server
+    volumes:
+      - ./spark/scripts:/home/${SSH_MASTER_USER:-master}/scripts
+      - ./spark/jar:/home/${SSH_MASTER_USER:-master}/jar
+volumes:
+  postgres-db-volume:
