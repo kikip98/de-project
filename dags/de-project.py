@@ -658,33 +658,9 @@ import_scraped_data_from_s3_to_pg_db_task = PythonOperator(
     dag=dag,
 )
 
-cmd = f'airflow connections delete \'ssh_spark_conn\';  \
-        airflow connections add \'ssh_spark_conn\' \
-        --conn-type \'ssh\' \
-        --conn-login \'master\' \
-        --conn-password  \'master\' \
-        --conn-host \'spark-server\' '
-
-
-create_ssh_conn_task = BashOperator(
-    task_id='create_ssh_conn_task',
-    bash_command=cmd,
-    trigger_rule=TriggerRule.ALL_SUCCESS,
-    dag=dag
-)
-
-sparkcmd = '/usr/spark-2.4.0/bin/spark-submit  /home/master/scripts/mllib_spark.py '
-
-spark_task= SSHOperator(
-    ssh_conn_id='ssh_spark_conn',
-    task_id='spark_task',
-    command= sparkcmd,
-    trigger_rule=TriggerRule.ALL_SUCCESS,
-    dag=dag) 
-
 
 # =============================================================================
 # 4. Indicating the order of the dags
 # =============================================================================
 
-create_schema_task >> scrape_twitter_data_task >>  scrape_skytrax_reviews_task >> save_twitter_data_to_s3_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task >> create_ssh_conn_task >> spark_task
+create_schema_task >> scrape_twitter_data_task >>  scrape_skytrax_reviews_task >> save_twitter_data_to_s3_task >> save_skytrax_reviews_to_s3_task >> import_scraped_data_from_s3_to_pg_db_task 
