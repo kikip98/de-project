@@ -1,4 +1,0 @@
-pandas
-pyspark
-psycopg2-binary
-boto3
