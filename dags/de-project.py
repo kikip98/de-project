@@ -109,7 +109,7 @@ def get_twitter_data(**kwargs):
     # Prepare the headers to pass the authentication to Twitter's api
     headers = {'Authorization': 'Bearer {}'.format(twitter_bearer_token)}
 
-
+    # Create queries and max results variables
     queries =  ["#BritishAirways lang:en", "@BritishAirways lang:en"]
     max_results = 50
 
@@ -117,6 +117,7 @@ def get_twitter_data(**kwargs):
         
         airline_name = re.sub(r"\B([A-Z])", r" \1", query[1:-8])
         
+        # Set parameters
         params = {'query': query,
                   'max_results': max_results,
                   'expansions': 'author_id',
@@ -228,7 +229,9 @@ def save_twitter_data_to_s3(**kwargs):
     log.info('Finished saving the scraped twitter data to s3 in parquet files')
 
 def get_skytrax_reviews(**kwargs): 
-
+    """
+	Scrape skytrax reviews using beautifulsoup
+	"""
     # Set a DataFrame and Lists to store information
     reviews_df = pd.DataFrame(columns = [ "airline","overall_rating","review_title","review_author",
                                         "review_text", "review_date_published", "aircraft",
